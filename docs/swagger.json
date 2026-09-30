@@ -1,0 +1,1761 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Team CalTalk API",
+    "version": "0.1.2",
+    "description": "팀 캘린더와 팀 채팅을 한 화면에 합친 Team CalTalk의 백엔드 REST API 명세. 참조 문서: docs/1-domain-definition.md, docs/2-PRD.md, docs/3-user-scenario.md, docs/4-wireframes.md, docs/5-project-principle.md, docs/6-arch-diagram.md, docs/7-erd.md, docs/8-pan.md, docs/schema.sql. 경로와 메서드는 설계 원칙 3.5 표의 (제안)이다 (설계 원칙 8장). ID는 DB에서 bigint (ERD 6장 제안)이며, JSON에서 integer로 둘지 string으로 둘지는 미결. 변경: 0.1.1 docs 문서와 일관성 검토 반영\n변경: 0.1.2 오류 응답마다 원인에 맞는 메시지 예시(examples) 추가, 공통 Error 스키마의 \"권한이 없습니다\" 예시 제거"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "(제안) 개발용"
+    }
+  ],
+  "tags": [
+    {
+      "name": "auth",
+      "description": "회원가입·로그인 (FR-01, FR-02). 로그아웃은 서버 경로 없음 (FR-16, 설계 원칙 미결-3)"
+    },
+    {
+      "name": "teams",
+      "description": "팀 생성·참여·목록, 초대 코드, 구성원 (FR-03~FR-06)"
+    },
+    {
+      "name": "schedules",
+      "description": "팀 일정 조회·추가·수정·삭제 (FR-07~FR-10)"
+    },
+    {
+      "name": "messages",
+      "description": "채팅, 변경 요청, 일자별 조회, Long Polling (FR-11~FR-13, FR-15)"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/auth/signup": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "signup",
+        "summary": "회원가입",
+        "description": "FR-01, UC-12, SC-01. 토큰 검사 없음 (S5-9). 이메일 대소문자 구분 여부와 이름·이메일 길이 제한은 미결 (결정-11, ERD-미결-4·5)",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password",
+                  "name"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8,
+                    "description": "8자 이상 (NFR-04). 원문 저장 금지"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "가입 성공. 응답에 비밀번호·해시 없음 (SC-01, S5-6)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "비밀번호 8자 미만 (FR-01, NFR-04, SC-01 E2), 이메일·이름이 비었거나 이메일 형식이 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "passwordTooShort": {
+                    "value": {
+                      "message": "비밀번호는 8자 이상이어야 합니다"
+                    }
+                  },
+                  "invalidInput": {
+                    "value": {
+                      "message": "이메일과 이름을 올바르게 입력해 주세요"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이미 가입한 이메일. 계정이 늘지 않음 (BR-16, SC-01 E1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "emailTaken": {
+                    "value": {
+                      "message": "이미 가입한 이메일입니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "operationId": "login",
+        "summary": "로그인",
+        "description": "FR-02, UC-01, SC-02. 토큰 검사 없음 (S5-9). JWT에는 사용자 ID만 담는다 (S5-8). 토큰 유효 기간(JWT_EXPIRES_IN)은 미결 (결정-4). 로그아웃은 서버 경로가 없다 (FR-16, 설계 원칙 미결-3)",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "로그인 성공. 토큰과 사용자 id·이름 (BE-02)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "token",
+                    "user"
+                  ],
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "JWT. Authorization: Bearer 헤더로 보낸다 (S5-9)"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "이메일·비밀번호가 비어 있음 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "emptyInput": {
+                    "value": {
+                      "message": "이메일과 비밀번호를 입력해 주세요"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "이메일 또는 비밀번호가 맞지 않음. 없는 이메일과 틀린 비밀번호는 같은 메시지 (SC-02 E1, NFR-04)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginFailed": {
+                    "value": {
+                      "message": "이메일 또는 비밀번호가 맞지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams": {
+      "get": {
+        "tags": [
+          "teams"
+        ],
+        "operationId": "listMyTeams",
+        "summary": "내 팀 목록",
+        "description": "FR-03, BR-10, BR-19. 내가 소속된 팀만, 각 팀의 내 역할 포함. 초대 코드 없음 (S5-10). 소속 팀이 없으면 빈 배열 (SC-02, WF-03)",
+        "responses": {
+          "200": {
+            "description": "내 팀 목록",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Team"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "teams"
+        ],
+        "operationId": "createTeam",
+        "summary": "팀 생성",
+        "description": "FR-04, UC-09, SC-03. 팀 + 팀장 소속 + 채팅방을 한 트랜잭션으로 만든다 (BR-11, BR-17, B2-8). 초대 코드는 응답에 없고 GET /api/teams/{teamId}/invite-code로 확인한다 (S5-10)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "길이 제한 미결 (결정-11)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "생성 성공. role은 leader",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Team"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "팀 이름이 비어 있음 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "emptyTeamName": {
+                    "value": {
+                      "message": "팀 이름을 입력해 주세요"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/join": {
+      "post": {
+        "tags": [
+          "teams"
+        ],
+        "operationId": "joinTeam",
+        "summary": "초대 코드로 팀 참여",
+        "description": "FR-06, UC-10, SC-04. 항상 member로 등록한다 (BR-11, BR-12). 응답에 초대 코드 없음 (S5-10)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "inviteCode"
+                ],
+                "properties": {
+                  "inviteCode": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "참여 성공. role은 member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Team"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "초대 코드가 비어 있음 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "emptyInviteCode": {
+                    "value": {
+                      "message": "초대 코드를 입력해 주세요"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없는 초대 코드. 어느 팀에도 등록되지 않음 (SC-04 E1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidInviteCode": {
+                    "value": {
+                      "message": "초대 코드가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이미 소속된 팀. 중복 등록되지 않음 (UC-10, SC-04 E2)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "alreadyJoined": {
+                    "value": {
+                      "message": "이미 참여한 팀입니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{teamId}/invite-code": {
+      "get": {
+        "tags": [
+          "teams"
+        ],
+        "operationId": "getInviteCode",
+        "summary": "초대 코드 확인 (팀장)",
+        "description": "FR-05, BR-18, SC-03",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "초대 코드",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteCode"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "teamId가 숫자가 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "소속되지 않은 팀 (BR-09, S5-11) 또는 팀원이 요청함 (BR-18, SC-03 E1). 데이터 반환 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  },
+                  "leaderOnly": {
+                    "value": {
+                      "message": "팀장만 초대 코드를 볼 수 있습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{teamId}/members": {
+      "get": {
+        "tags": [
+          "teams"
+        ],
+        "operationId": "listMembers",
+        "summary": "팀 구성원 목록",
+        "description": "FR-08 (관련 팀원 선택용), BE-04. 그 팀 구성원만 돌려준다 (BR-09)",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "구성원 목록",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Member"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "teamId가 숫자가 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "소속되지 않은 팀 또는 존재하지 않는 팀. 데이터를 반환하지 않는다 (BR-09, S5-11)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{teamId}/schedules": {
+      "get": {
+        "tags": [
+          "schedules"
+        ],
+        "operationId": "listSchedules",
+        "summary": "기간별 일정 조회",
+        "description": "FR-07, UC-02, SC-05. 기간과 겹치는, 이 팀의 삭제되지 않은 일정만 (BR-02, BR-09). 화면이 한국 표준시 경계를 UTC로 바꿔 보낸다 (제안, BE-06). 겹침 조건의 경계(시작 = 종료인 일정, 종료가 from과 같은 일정)는 미결 (BE-06에서 구현 때 정함)",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "기간 시작 (UTC ISO 8601, 제안)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "description": "기간 끝 (UTC ISO 8601, 제안)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "일정 목록",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Schedule"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "from·to가 없거나 형식이 틀림, 또는 teamId가 숫자가 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidPeriod": {
+                    "value": {
+                      "message": "조회 기간이 올바르지 않습니다"
+                    }
+                  },
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "소속되지 않은 팀. 데이터 반환 없음 (BR-09, SC-05 E1, S5-11)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "schedules"
+        ],
+        "operationId": "createSchedule",
+        "summary": "일정 추가 (팀장)",
+        "description": "FR-08, UC-03, SC-06. 일정 + 관련 팀원을 한 트랜잭션으로 저장 (B2-8)",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "추가 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "종료가 시작보다 앞섬 (BR-14, SC-06 E1, 같으면 허용), 관련 팀원에 팀장·다른 팀 소속·없는 소속 ID 지정 (BR-13, SC-06 E2·E3, B2-7), 제목이 비었거나 시각 형식이 틀림 (S5-12), 또는 teamId가 숫자가 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "endBeforeStart": {
+                    "value": {
+                      "message": "종료 일시는 시작 일시와 같거나 이후여야 합니다"
+                    }
+                  },
+                  "participantIsLeader": {
+                    "value": {
+                      "message": "팀장은 관련 팀원이 될 수 없습니다"
+                    }
+                  },
+                  "participantOtherTeam": {
+                    "value": {
+                      "message": "같은 팀의 팀원만 선택할 수 있습니다"
+                    }
+                  },
+                  "invalidInput": {
+                    "value": {
+                      "message": "제목과 일시를 올바르게 입력해 주세요"
+                    }
+                  },
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "팀원이 요청함 (BR-03, SC-06 E4) 또는 소속되지 않은 팀 (BR-09). 저장되지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "leaderOnly": {
+                    "value": {
+                      "message": "팀장만 할 수 있습니다"
+                    }
+                  },
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{teamId}/schedules/{scheduleId}": {
+      "put": {
+        "tags": [
+          "schedules"
+        ],
+        "operationId": "updateSchedule",
+        "summary": "일정 수정 (팀장)",
+        "description": "FR-09, UC-04, UC-07, SC-07. 입력 검사는 일정 추가와 같다. 관련 팀원은 교체하며 한 트랜잭션. 최종 수정자·수정 일시를 기록하고 작성자는 유지",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "description": "일정 ID",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "수정 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Schedule"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "종료 < 시작 (BR-14), 관련 팀원에 팀장·다른 팀 소속 지정 (BR-13), 입력 형식 오류 (S5-12), teamId가 숫자가 아님 (S5-12). 실패하면 기존 값 유지 (SC-07 E1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "endBeforeStart": {
+                    "value": {
+                      "message": "종료 일시는 시작 일시와 같거나 이후여야 합니다"
+                    }
+                  },
+                  "participantIsLeader": {
+                    "value": {
+                      "message": "팀장은 관련 팀원이 될 수 없습니다"
+                    }
+                  },
+                  "participantOtherTeam": {
+                    "value": {
+                      "message": "같은 팀의 팀원만 선택할 수 있습니다"
+                    }
+                  },
+                  "invalidInput": {
+                    "value": {
+                      "message": "제목과 일시를 올바르게 입력해 주세요"
+                    }
+                  },
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "팀원이 요청함 (BR-04, SC-07 E2) 또는 소속되지 않은 팀 (BR-09). 일정이 바뀌지 않음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "leaderOnly": {
+                    "value": {
+                      "message": "팀장만 할 수 있습니다"
+                    }
+                  },
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없는 일정, 이미 삭제한 일정, 다른 팀의 일정 ID (FR-10, BR-09, S5-11)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "scheduleNotFound": {
+                    "value": {
+                      "message": "일정을 찾을 수 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "schedules"
+        ],
+        "operationId": "deleteSchedule",
+        "summary": "일정 삭제 (팀장, 논리 삭제)",
+        "description": "FR-10, UC-11, SC-08. is_deleted만 true로 바꾼다 (NFR-06). 이 일정을 참조하는 변경 요청 메시지는 그대로 남는다 (BR-15)",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "scheduleId",
+            "in": "path",
+            "required": true,
+            "description": "일정 ID",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "삭제 성공. 응답 본문 형식은 문서에 정해지지 않음 (미결)"
+          },
+          "400": {
+            "description": "teamId가 숫자가 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "팀원이 요청함 (BR-03, SC-08 E1) 또는 소속되지 않은 팀 (BR-09). 일정이 그대로임",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "leaderOnly": {
+                    "value": {
+                      "message": "팀장만 할 수 있습니다"
+                    }
+                  },
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없는 일정, 이미 삭제한 일정, 다른 팀의 일정 ID (FR-10, BR-09, S5-11)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "scheduleNotFound": {
+                    "value": {
+                      "message": "일정을 찾을 수 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{teamId}/messages": {
+      "get": {
+        "tags": [
+          "messages"
+        ],
+        "operationId": "listMessagesByDate",
+        "summary": "날짜별 메시지 조회",
+        "description": "FR-13, FR-15, UC-08, SC-13. 한국 표준시 그날 00:00~24:00에 작성된 이 팀 메시지를 오래된 순으로 (BR-07). 변경 요청 메시지는 대상 일정과 함께, 삭제된 일정도 포함 (BR-15). 채팅 기본 날짜는 미결 (결정-7)",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "description": "한국 표준시 날짜 YYYY-MM-DD",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-09-30"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "메시지 목록 (오래된 순)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "date가 없거나 형식이 틀리거나 없는 날짜 (예: 2026-02-30) (S5-12), 또는 teamId가 숫자가 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidDate": {
+                    "value": {
+                      "message": "날짜가 올바르지 않습니다"
+                    }
+                  },
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "소속되지 않은 팀. 데이터 반환 없음 (BR-09, SC-13 E1, S5-11)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "messages"
+        ],
+        "operationId": "createMessage",
+        "summary": "메시지·변경 요청 보내기",
+        "description": "FR-11, FR-12, UC-05, UC-06, SC-09, SC-10. 본문의 type으로 일반 메시지와 변경 요청을 구분한다. 변경 요청은 보낸 사람이 이 팀의 팀원이고 대상 일정의 관련 팀원이어야 한다 (BR-05, B2-7). 삭제된 일정으로의 새 변경 요청은 거부한다 (ERD 6장 제안). 이때의 상태 코드는 문서에 정해지지 않음 (미결). 메시지 수정·삭제 경로는 없다 (FR-15)",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "저장 성공. 같은 팀의 폴링 대기 요청을 깨운다 (BE-10)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "내용이 비어 있음 (S5-12), normal에 targetScheduleId를 보냄, change_request인데 targetScheduleId가 없음 (도메인 정의서 5장), 또는 teamId가 숫자가 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "emptyContent": {
+                    "value": {
+                      "message": "메시지 내용을 입력해 주세요"
+                    }
+                  },
+                  "invalidMessageType": {
+                    "value": {
+                      "message": "메시지 유형과 대상 일정이 맞지 않습니다"
+                    }
+                  },
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "소속되지 않은 팀 (BR-09, SC-09 E1), 본인이 관련 팀원이 아닌 일정으로 변경 요청 (BR-05, SC-10 E1), 다른 팀 일정·존재하지 않는 일정으로 변경 요청 (BR-09, SC-10 E2), 팀장이 변경 요청 (BR-13, SC-10 E3). 저장되지 않음 (BE-09)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  },
+                  "cannotRequestChange": {
+                    "value": {
+                      "message": "이 일정은 변경을 요청할 수 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/teams/{teamId}/messages/poll": {
+      "get": {
+        "tags": [
+          "messages"
+        ],
+        "operationId": "pollMessages",
+        "summary": "새 메시지 대기 (Long Polling)",
+        "description": "FR-11, NFR-01, BE-10. after 이후 메시지가 이미 있으면 바로 응답한다. 새 메시지가 없으면 서버가 최대 약 25초(제안) 대기 후 빈 배열 응답. 대기 중에는 DB 연결을 잡지 않는다 (B2-10). 응답 형식은 날짜별 조회와 같다. 소속되지 않은 팀이면 대기하지 않고 즉시 403. 날짜 조회와의 연결 방식은 미결 (결정-7)",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "path",
+            "required": true,
+            "description": "팀 ID. 숫자가 아니면 400 (S5-12)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": true,
+            "description": "마지막으로 받은 메시지 ID. 필수 정수 (제안, BE-10)",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "after 이후 새 메시지 목록. 대기 상한이 지나면 빈 배열",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Message"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "after가 없거나 정수가 아님 (S5-12), 또는 teamId가 숫자가 아님 (S5-12)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidAfter": {
+                    "value": {
+                      "message": "마지막 메시지 ID가 올바르지 않습니다"
+                    }
+                  },
+                  "invalidTeamId": {
+                    "value": {
+                      "message": "팀 ID가 올바르지 않습니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "로그인 필요. 토큰이 없거나 형식이 틀리거나 서명이 다르거나 만료됨 (BR-01, FR-02, SC-02 E2·E3)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "loginRequired": {
+                    "value": {
+                      "message": "로그인이 필요합니다"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "소속되지 않은 팀. 대기 없이 즉시 거부, 데이터 반환 없음 (BR-09, S5-11)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "notTeamMember": {
+                    "value": {
+                      "message": "접근 권한이 없습니다"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Authorization: Bearer <토큰> (S5-9). 회원가입·로그인 외 모든 경로에 필요. 토큰에는 사용자 ID만 있다 (S5-8). 유효 기간은 미결 (결정-4)"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "description": "오류 응답 형식 (A3-5). SQL·스택 같은 내부 정보는 담지 않는다 (S5-14)",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "사용자에게 보여 줄 오류 메시지. 경로별 예시는 각 응답의 examples 참고 (문구는 예시, 와이어프레임 A-8)"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "description": "사용자. 비밀번호와 비밀번호 해시는 절대 포함하지 않는다 (NFR-04, S5-6)",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "로그인 응답은 사용자 id·이름만 명시되어 있다(BE-02). 이메일 포함은 (제안)"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "Team": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "description": "팀. 초대 코드는 포함하지 않는다 (S5-10, BR-18)",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string",
+            "description": "길이 제한 미결 (결정-11)"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "leader",
+              "member"
+            ],
+            "description": "이 팀에서의 내 역할. 화면 버튼 표시에 쓴다 (BR-10, F2-8)"
+          }
+        }
+      },
+      "InviteCode": {
+        "type": "object",
+        "required": [
+          "inviteCode"
+        ],
+        "description": "초대 코드. 팀장에게만 내려 준다 (BR-18, FR-05)",
+        "properties": {
+          "inviteCode": {
+            "type": "string",
+            "description": "추측하기 어려운 무작위 값 (S5-10). 형식·길이 미결 (ERD-미결-5)"
+          }
+        }
+      },
+      "Member": {
+        "type": "object",
+        "required": [
+          "membershipId",
+          "userId",
+          "name",
+          "role"
+        ],
+        "description": "팀 구성원 (BE-04). 비밀번호 해시 없음 (S5-6)",
+        "properties": {
+          "membershipId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "소속 ID. 일정의 관련 팀원 지정에 쓴다 (BR-13)"
+          },
+          "userId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "leader",
+              "member"
+            ]
+          }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "startAt",
+          "endAt",
+          "participants",
+          "creatorId",
+          "updaterId",
+          "updatedAt"
+        ],
+        "description": "팀 일정 (FR-07~FR-09). 조회 결과에는 삭제되지 않은 일정만 나온다 (FR-07, SC-05 E2)",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string",
+            "description": "길이 제한 미결 (결정-11)"
+          },
+          "startAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "시작 일시 (UTC ISO 8601)"
+          },
+          "endAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "종료 일시 (UTC ISO 8601). 시작과 같거나 이후 (BR-14)"
+          },
+          "participants": {
+            "type": "array",
+            "description": "관련 팀원. 프론트엔드가 '내가 관련 팀원인 일정'을 가려내는 데 쓴다 (BE-06, WF-10)",
+            "items": {
+              "type": "object",
+              "required": [
+                "membershipId",
+                "userId",
+                "name"
+              ],
+              "properties": {
+                "membershipId": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "userId": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "creatorId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "작성자 사용자 ID"
+          },
+          "updaterId": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "최종 수정자 사용자 ID. 수정 전에는 null (제안, ERD 2.4)"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "수정 일시 (UTC). 수정 전에는 null (제안, ERD 2.4)"
+          }
+        }
+      },
+      "ScheduleInput": {
+        "type": "object",
+        "required": [
+          "title",
+          "startAt",
+          "endAt"
+        ],
+        "description": "일정 추가·수정 요청 본문 (FR-08, FR-09)",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "비어 있으면 400. 길이 제한 미결 (결정-11)"
+          },
+          "startAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC ISO 8601"
+          },
+          "endAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC ISO 8601. 시작보다 앞서면 400 (BR-14)"
+          },
+          "participantMembershipIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "관련 팀원의 소속 ID 목록 (제안, BE-06). 같은 팀의 member만 허용 (BR-13). 0명 허용 여부와 생략 가능 여부는 미결 (결정-11, 와이어프레임 A-7)"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": [
+          "id",
+          "authorId",
+          "authorName",
+          "content",
+          "createdAt",
+          "type",
+          "targetSchedule"
+        ],
+        "description": "채팅 메시지 (FR-11, FR-12). 처리 상태 필드는 없다 (BR-06)",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "메시지 ID. Long Polling의 after 기준 (ERD 2.7)"
+          },
+          "authorId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "authorName": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "작성 일시 (UTC ISO 8601)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "change_request"
+            ]
+          },
+          "targetSchedule": {
+            "type": "object",
+            "nullable": true,
+            "description": "변경 요청 대상 일정 요약. 일반 메시지는 null. 삭제된 일정도 함께 내려 준다 (BR-15). 요청 당시가 아닌 최신 내용 기준 (결정-5 미결, 현재 스키마 B안). 삭제된 일정의 제목을 화면에 병기할지는 미결 (결정-6)",
+            "required": [
+              "id",
+              "title",
+              "startAt",
+              "endAt",
+              "isDeleted"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "title": {
+                "type": "string"
+              },
+              "startAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "endAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "isDeleted": {
+                "type": "boolean",
+                "description": "true면 화면에 '삭제됨' 표시 (BR-15, SC-12)"
+              }
+            }
+          }
+        }
+      },
+      "MessageInput": {
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "description": "메시지·변경 요청 보내기 요청 본문 (FR-11, FR-12)",
+        "properties": {
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "description": "비어 있으면 400. 길이 제한 미결 (결정-11)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "change_request"
+            ],
+            "default": "normal",
+            "description": "생략하면 normal (BE-08)"
+          },
+          "targetScheduleId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "change_request이면 필수, normal이면 보내면 400 (도메인 정의서 5장)"
+          }
+        }
+      }
+    }
+  }
+}

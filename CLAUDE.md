@@ -82,7 +82,7 @@ Team CalTalk은 학생과 20~50대 직장인이 팀 단위로 쓰는 웹 애플�
 |------|------|
 | 프론트엔드 | React 19 + TypeScript + Zustand + TanStack Query (반응형 웹, 네이티브 앱 없음) |
 | 백엔드 | Node.js + JavaScript + Express + pg 라이브러리 (Prisma 사용 금지) |
-| 데이터베이스 | PostgreSQL 17 |
+| 데이터베이스 | PostgreSQL 18 |
 | 실시간 채팅 | Long Polling (WebSocket 사용 안 함) |
 
 - 외부 연동(Google Calendar, Slack 등)과 새 인프라(메시지 브로커, 캐시 서버 등)는 추가하지 않는다.

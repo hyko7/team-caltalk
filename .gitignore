@@ -1,0 +1,23 @@
+# 의존성 (mockup/, 앞으로 만들 frontend/, backend/)
+node_modules/
+
+# 환경변수: 비밀값이 들어간다 (설계 원칙 S5-4). 키 이름만 적은 .env.example은 올린다.
+.env
+.env.*
+!.env.example
+
+# 빌드 결과, 테스트 커버리지
+dist/
+coverage/
+
+# 로그
+*.log
+
+# Claude Code 개인 설정 (팀 공용 설정인 .claude/agents, .claude/skills는 올린다)
+.claude/settings.local.json
+
+# 운영체제·편집기가 만드는 파일
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
