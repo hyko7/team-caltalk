@@ -1,6 +1,6 @@
 # Team CalTalk 프로젝트 구조 설계 원칙
 
-버전 0.4 · 최종 수정일 2026-09-30
+버전 0.5 · 최종 수정일 2026-09-30
 
 참조 문서: `docs/1-domain-definition.md` (도메인 정의서 v0.4), `docs/2-PRD.md` (PRD v0.8), `docs/3-user-scenario.md` (사용자 시나리오 v0.2), `docs/4-wireframes.md` (와이어프레임 v0.5)
 
@@ -44,7 +44,7 @@ team-caltalk/
 ├─ prompts/           docs 문서를 만들 때 쓴 프롬프트 모음 (Domain정의서생성.md, PRD생성.md)
 ├─ docs/              요구사항·설계 문서, DB 스키마 SQL(schema.sql)
 ├─ frontend/          React 앱 (개발 단계에서 생성 예정, 6장)
-└─ backend/           Express API 서버 (개발 단계에서 생성 예정, 7장)
+└─ backend/           Express API 서버 (생성됨, 현재 CLAUDE.md만 있음, 7장)
 ```
 
 | 경로 | 용도 | 상태 |
@@ -55,7 +55,7 @@ team-caltalk/
 | `prompts/` | docs 문서를 만들 때 쓴 프롬프트 모음 | 있음 |
 | `docs/` | 요구사항·설계 문서. DB 스키마 SQL(`docs/schema.sql`)도 여기에 둔다 | 있음 |
 | `frontend/` | React 앱 | 개발 단계에서 생성 예정 |
-| `backend/` | Express API 서버 | 개발 단계에서 생성 예정 |
+| `backend/` | Express API 서버. 백엔드 작업 규칙은 `backend/CLAUDE.md` | 생성됨 (현재 `CLAUDE.md`만 있음) |
 
 ## 2. 의존성·레이어 원칙
 
@@ -415,3 +415,4 @@ backend/
 | 0.2 | 2026-09-30 | hyko7 | 1.1 저장소 최상위 구성 추가(CLAUDE.md, .mcp.json, .claude/, prompts/, docs/와 각 용도), P1-10을 실제 구성에 맞게 수정, frontend/·backend/는 개발 단계에서 생성 예정으로 표시(1.1, 6장, 7장) |
 | 0.3 | 2026-09-30 | hyko7 | DB 스키마 파일 위치를 backend/db/schema.sql에서 docs/schema.sql로 변경 (1.1 저장소 구성, 7장 백엔드 트리·폴더 표·폴더 규칙, 8장 제안, 9장 미결-10) |
 | 0.4 | 2026-09-30 | hyko7 | PostgreSQL 버전 표기를 17에서 설치 환경 기준 18로 변경 |
+| 0.5 | 2026-09-30 | hyko7 | 1.1 저장소 구성에서 backend/를 생성됨으로 변경 (현재 backend/CLAUDE.md만 있음) |

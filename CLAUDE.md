@@ -10,6 +10,15 @@
   - 버전을 올리면 문서 상단의 버전 표시도 함께 바꾼다.
 - 아래 "코딩 작업 지침"을 따른다. 오버엔지니어링 금지는 "2. 단순함 우선"에 정리했다.
 
+## 작업 수행 지침
+
+- **오버엔지니어링 금지.** 요청받은 것만, 지금 필요한 만큼만 만든다. 자세한 기준은 "코딩 작업 지침 2. 단순함 우선"을 따른다.
+- 폴더별 추가 규칙은 그 폴더의 CLAUDE.md를 따른다 (예: `backend/CLAUDE.md`).
+
+## 커뮤니케이션 지침
+
+- **모든 대화는 한국어로 한다.** 코드 식별자(변수, 함수, 파일 이름)는 영어로 쓴다.
+
 ## 코딩 작업 지침
 
 흔한 코딩 실수를 줄이기 위한 행동 지침이다. 속도보다 신중함을 우선하며, 아주 사소한 작업은 상황에 맞게 판단한다.
@@ -88,6 +97,22 @@ Team CalTalk은 학생과 20~50대 직장인이 팀 단위로 쓰는 웹 애플�
 - 외부 연동(Google Calendar, Slack 등)과 새 인프라(메시지 브로커, 캐시 서버 등)는 추가하지 않는다.
 - 일시는 UTC로 저장하고, 날짜 경계와 화면 표시는 한국 표준시(Asia/Seoul)를 기준으로 한다.
 
+## 프로젝트 최상위 디렉토리 구조
+
+```
+team-caltalk/
+├─ CLAUDE.md      이 파일. 프로젝트 전체 작업 규칙
+├─ .mcp.json      MCP 서버 설정 (postgresql-mcp는 POSTGRES_CONNECTION_STRING 환경변수 참조)
+├─ .env           로컬 비밀값. Git에 올리지 않는다
+├─ .gitignore     .env, node_modules 등 제외
+├─ .claude/       서브에이전트(agents/), 개발 스킬(skills/)
+├─ prompts/       docs 문서를 만들 때 쓴 프롬프트
+├─ docs/          요구사항·설계 문서, SQL, API 명세 (아래 목록)
+├─ mockup/        docs/swagger.json 기반 모의 API 서버 (포트 3000)
+├─ backend/       Express API 서버. 규칙은 backend/CLAUDE.md
+└─ frontend/      React 앱 (개발 단계에서 생성 예정)
+```
+
 ## docs/ 문서 목록
 
 | 문서 | 역할 |
@@ -96,6 +121,13 @@ Team CalTalk은 학생과 20~50대 직장인이 팀 단위로 쓰는 웹 애플�
 | `docs/2-PRD.md` | 제품 요구사항 문서. 목표 사용자, 목표, 범위(포함·제외), 기능(FR-xx)·비기능(NFR-xx) 요구사항, 기술 제약, 화면 구성, 2일 마일스톤, 리스크(R-xx), 미결 사항(Q-xx)을 정한다 |
 | `docs/3-user-scenario.md` | 사용자 시나리오. 팀장·팀원·가입 전 사용자 역할별 사용 흐름(SC-xx)을 사전 조건, 단계, 기대 결과, 거부 흐름으로 정리하고 관련 UC/BR/FR에 연결한다 |
 | `docs/4-wireframes.md` | 와이어프레임. 화면별 배치와 구성 요소(WF-xx)를 ASCII 그림으로 그리고, 화면 이동 흐름, 팀장·팀원 표시 차이, 빈 상태·오류 상태, 넓은 화면·작은 화면 배치를 정리한다 |
+| `docs/5-project-principle.md` | 프로젝트 구조 설계 원칙. 레이어·네이밍·테스트·보안 원칙과 프론트엔드·백엔드 디렉토리 구조 |
+| `docs/6-arch-diagram.md` | 기술 아키텍처 다이어그램(mermaid). 전체 구조, 레이어, Long Polling, 권한 검사, 변경 요청 흐름 |
+| `docs/7-erd.md` | ERD(mermaid). 테이블·컬럼·제약·인덱스와 서비스에서 검사할 규칙 |
+| `docs/8-pan.md` | 실행 계획(WBS). DB·BE·FE Task, 완료 조건 체크박스, 착수 전 결정 사항 |
+| `docs/schema.sql` | DB 생성 DDL (PostgreSQL 18) |
+| `docs/seed.sql` | 개발용 DB(team_caltalk)에 넣는 테스트 데이터. 기존 데이터를 지우고 다시 넣는다 |
+| `docs/swagger.json` | 백엔드 API 명세 (OpenAPI 3.0.3) |
 
 - 두 문서가 어긋나면 도메인 규칙은 도메인 정의서를, 기술·성능·일정은 PRD를 따른다. 어긋난 부분은 사용자에게 알린다.
 - 코드와 커밋에서 요구사항을 가리킬 때는 문서의 ID(UC-xx, BR-xx, FR-xx, NFR-xx, SC-xx, WF-xx)를 쓴다.
