@@ -4,12 +4,15 @@ import { logger } from '../lib/logger.js';
 export function requestLogger(req, res, next) {
   const start = process.hrtime.bigint();
   res.on('finish', () => {
-    logger.info('요청', {
+    const details = {
       method: req.method,
       path: req.originalUrl.split('?')[0],
       status: res.statusCode,
       durationMs: Number(process.hrtime.bigint() - start) / 1e6,
-    });
+    };
+    if (req.user) details.userId = req.user.id;
+    if (req.team) details.teamId = req.team.id;
+    logger.info('요청', details);
   });
   next();
 }
