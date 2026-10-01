@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --env-file=.env.test --test --test-concurrency=1 --experimental-test-coverage --test-coverage-include=src/**/*.js --test-coverage-exclude=src/server.js --test-coverage-lines=80 \"test/**/*.test.js\""
   },
   "dependencies": {
     "cors": "^2.8.6",

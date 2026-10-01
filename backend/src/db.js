@@ -21,3 +21,29 @@ export async function query(sql, params = []) {
     throw error;
   }
 }
+
+// 여러 테이블을 함께 바꿀 때 쓴다. fn은 client.query(sql, params)로 SQL을 실행한다 (B2-8).
+export async function transaction(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    // ROLLBACK 실패가 원래 오류를 덮지 않게 한다
+    await client.query('ROLLBACK').catch(() => {});
+    logger.error('DB 트랜잭션 실패', {
+      code: error.code,
+      message: error.message,
+      constraint: error.constraint,
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export function closePool() {
+  return pool.end();
+}
