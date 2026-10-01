@@ -1,5 +1,6 @@
 // pg 연결 풀과 쿼리 함수. SQL 값은 항상 $1, $2 파라미터로 넘긴다 (B2-9).
 import pg from 'pg';
+pg.types.setTypeParser(20, Number); // bigint(int8)를 숫자로 받는다: swagger의 User.id는 integer
 import { config } from './config.js';
 import { logger } from './lib/logger.js';
 
