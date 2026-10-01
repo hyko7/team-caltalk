@@ -3,8 +3,8 @@ import pg from 'pg';
 import { config } from './config.js';
 import { logger } from './lib/logger.js';
 
-// 풀 크기는 10에서 시작한다 (S5-15, 제안)
-const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
+// 풀 크기는 DB_POOL_SIZE로 바꿀 수 있고 기본값은 10이다 (S5-15)
+const pool = new pg.Pool({ connectionString: config.databaseUrl, max: config.dbPoolSize });
 
 export async function query(sql, params = []) {
   try {

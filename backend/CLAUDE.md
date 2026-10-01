@@ -14,11 +14,13 @@
 | `JWT_SECRET` | 토큰 서명 키 (비밀값) |
 | `JWT_EXPIRES_IN` | 토큰 유효 기간 (값은 미결-3) |
 | `CORS_ORIGIN` | 허용할 프론트엔드 주소 |
-| `NODE_ENV` | 실행 환경. `development`(개발) 또는 `production`(운영). 로그 출력 여부를 정한다(5장) |
+| `NODE_ENV` | 실행 환경. `development`(개발), `test`(테스트), `production`(운영). 로그 출력 여부를 정한다(5장) |
+| `DB_POOL_SIZE` | DB 연결 풀 크기. 선택 항목이며 기본값은 10 (S5-15) |
 
 - 환경변수는 `src/config.js` 한 곳에서만 읽는다. 다른 파일에서 `process.env`를 직접 읽지 않는다.
 - 필수 값이 없으면 서버가 시작할 때 오류를 내고 멈춘다.
-- `.env`는 Git에 올리지 않는다. 키 이름만 적은 `.env.example`을 올린다.
+- `NODE_ENV=test`이면 `backend/.env.test`를 읽어 테스트용 DB(`team_caltalk_test`)에 연결하고, 그 밖에는 `backend/.env`를 읽는다.
+- `.env`, `.env.test`는 Git에 올리지 않는다. 키 이름만 적은 `.env.example`, `.env.test.example`을 올린다.
 - 비밀번호, 토큰, 연결 문자열은 로그와 오류 응답에 남기지 않는다.
 
 ## 2. SOLID·Clean 아키텍처 적용 방식
@@ -47,7 +49,7 @@ backend/
 │  ├─ server.js          서버 시작 (포트 열기)
 │  ├─ app.js             Express 설정, 라우터 연결, 오류 처리 연결
 │  ├─ config.js          환경변수 읽기·검사
-│  ├─ db.js              pg 연결 풀, query·트랜잭션 도우미
+│  ├─ db.js              pg 연결 풀(DB_POOL_SIZE, 기본 10), query·트랜잭션 도우미
 │  ├─ middleware/
 │  │  ├─ auth.js         JWT 확인 → 로그인 사용자 (BR-01)
 │  │  ├─ team.js         팀 소속·팀장 확인 (BR-09, BR-03)

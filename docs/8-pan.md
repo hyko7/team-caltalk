@@ -1,6 +1,6 @@
 # Team CalTalk 실행 계획 (WBS)
 
-버전 0.4 · 최종 수정일 2026-09-30
+버전 0.5 · 최종 수정일 2026-09-30
 
 참조 문서: `docs/1-domain-definition.md` (도메인 정의서 v0.4), `docs/2-PRD.md` (PRD v0.8), `docs/3-user-scenario.md` (사용자 시나리오 v0.2), `docs/4-wireframes.md` (와이어프레임 v0.5), `docs/5-project-principle.md` (프로젝트 구조 설계 원칙 v0.3), `docs/6-arch-diagram.md` (기술 아키텍처 다이어그램 v0.1), `docs/7-erd.md` (ERD v0.2), `docs/schema.sql`
 
@@ -191,10 +191,11 @@ flowchart LR
 **수행 작업**
 - `backend/package.json`(ES 모듈, `start`·`test` 스크립트), `backend/.env.example`(키 이름만)을 만든다. `.gitignore`에 `.env`를 넣는다(S5-4).
 - `backend/src/config.js`: 환경변수 `PORT`, `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, 프론트엔드 주소를 읽고 검사한다. 필수 값이 없으면 시작 단계에서 오류를 내고 멈춘다.
-- `backend/src/db.js`: pg 연결 풀(10 안팎), 파라미터 바인딩 `query`, 트랜잭션 도우미(오류 시 롤백).
+- `backend/src/config.js`는 `NODE_ENV=test`일 때 `backend/.env.test`(테스트용 DB `team_caltalk_test`)를, 그 밖에는 `backend/.env`를 읽는다. `.env.test`는 Git에서 제외하고 `.env.test.example`(키 이름만)을 올린다.
+- `backend/src/db.js`: pg 연결 풀(크기는 `DB_POOL_SIZE`, 기본 10), 파라미터 바인딩 `query`, 트랜잭션 도우미(오류 시 롤백).
 - `backend/src/lib/httpError.js`, `backend/src/middleware/errorHandler.js`: 상태 코드가 담긴 오류를 `{ "message": "..." }`로 바꾸고 요청 로그 한 줄을 남긴다.
 - `backend/src/app.js`(Express 설정, CORS, JSON 본문, 없는 경로 404, 오류 처리 연결), `backend/src/server.js`(포트 열기).
-- `backend/test/helpers.js`: 테스트 DB 테이블 비우기, 서버 기동·종료, 사용자 만들기·토큰 받기 도우미.
+- `backend/test/helpers.js`: 테스트 DB 테이블 비우기, 서버 기동·종료 도우미. (사용자 만들기·토큰 받기 도우미는 BE-02로 옮김)
 
 **완료 조건**
 - [ ] `npm test`가 실행되고, 테스트용 DB에 연결해 쿼리를 실행한다 (T4-2)
@@ -204,7 +205,7 @@ flowchart LR
 - [ ] 트랜잭션 도우미는 중간에 오류가 나면 앞서 실행한 INSERT를 되돌린다 (B2-8)
 - [ ] 없는 경로 요청은 404 `{ "message": ... }`, 서비스가 던진 400·401·403·404·409 오류는 해당 상태 코드와 `{ "message": ... }`로 응답한다 (A3-5)
 - [ ] 예상하지 못한 오류는 500으로 응답하고 SQL·스택 같은 내부 정보를 응답에 담지 않는다 (S5-14)
-- [ ] 요청 로그는 메서드, 경로, 상태 코드, 소요 시간 한 줄이고 비밀번호·토큰·메시지 본문은 로그에 없다 (S5-13)
+- [ ] 요청 로그는 logger로만 남고(`NODE_ENV=development`에서만 출력) 메서드, 경로, 상태 코드, 소요 시간이 들어 있으며 비밀번호·토큰·메시지 본문은 로그에 없다 (S5-13)
 - [ ] 프론트엔드 주소가 아닌 Origin의 브라우저 요청은 CORS로 허용되지 않는다 (S5-3)
 - [ ] 전체 `npm test` 통과, 이 Task 코드 커버리지 90% 이상 (스킬 기준)
 
@@ -231,6 +232,7 @@ flowchart LR
 - [ ] 틀린 비밀번호와 없는 이메일은 같은 401 메시지로 응답한다 (SC-02 E1)
 - [ ] 이메일에 `' OR 1=1 --` 같은 문자열을 넣어도 로그인이 401이다 (NFR-04, B2-9)
 - [ ] 로그에 비밀번호와 토큰이 남지 않는다 (S5-13)
+- [ ] `backend/test/helpers.js`에 사용자 만들기·토큰 받기 도우미가 있고, 이 Task의 테스트에서 쓴다 (BE-01에서 옮김)
 - [ ] 전체 `npm test` 통과, 이 Task 코드 커버리지 90% 이상 (스킬 기준)
 
 ### BE-03 로그인·팀 소속·팀장 확인 미들웨어
@@ -441,7 +443,7 @@ flowchart LR
 - [ ] 소속되지 않은 팀의 폴링 요청은 대기하지 않고 즉시 403이다 (BR-09) [T4-3]
 - [ ] 토큰이 없으면 401, `after`가 정수가 아니면 400이다 (BR-01, S5-12)
 - [ ] 같은 팀에서 대기 중인 요청 50개가 메시지 1건에 모두 깨어나 그 메시지를 받는다 (NFR-01)
-- [ ] 연결 풀 크기를 2로 낮춘 상태에서 폴링 대기 30개가 걸려 있어도 다른 API(일정 조회 등)가 정상 응답한다 (B2-10, S5-15)
+- [ ] `DB_POOL_SIZE=2`로 연결 풀 크기를 낮춘 상태에서 폴링 대기 30개가 걸려 있어도 다른 API(일정 조회 등)가 정상 응답한다 (B2-10, S5-15)
 - [ ] 클라이언트가 연결을 끊은 요청은 대기 목록에서 제거된다 (S5-16, F2-7)
 - [ ] 전체 `npm test` 통과, 이 Task 코드 커버리지 90% 이상 (스킬 기준)
 
@@ -772,3 +774,4 @@ FE Task의 UI 작업은 결정-2(스타일 가이드 없음)의 영향을 받는
 | 0.2 | 2026-09-30 | hyko7 | 파일 이름을 docs/8-execution-plan.md에서 docs/8-pan.md로 변경, 결정-3의 파일 이름 반영 |
 | 0.3 | 2026-09-30 | hyko7 | PostgreSQL 버전 표기를 17에서 설치 환경 기준 18로 변경 |
 | 0.4 | 2026-09-30 | hyko7 | DB-01 완료: 완료 조건 10개 체크, 진행 결과(DB 이름 team_caltalk·team_caltalk_test, 결정-5·12 해당 없음) 기록 |
+| 0.5 | 2026-10-01 | hyko7 | 착수 전 결정 반영: BE-01에 .env.test·DB_POOL_SIZE 추가, 사용자 만들기·토큰 받기 도우미를 BE-01에서 BE-02 완료 조건으로 이동, BE-01 요청 로그 조건을 S5-13(logger 규칙)에 맞춤, BE-10 풀 크기 조건을 DB_POOL_SIZE로 표기 |
