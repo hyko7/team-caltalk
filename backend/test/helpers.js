@@ -46,3 +46,26 @@ export async function createUserAndLogin(baseUrl, { email, password = 'password1
   const { user, token } = await login.json();
   return { user, token, email, password };
 }
+
+// 팀을 만들고 만든 사람을 팀장으로 넣는다. chat_rooms는 만들지 않는다 (BE-03)
+let teamCounter = 0;
+export async function createTeam(creatorId) {
+  ++teamCounter;
+  const { rows } = await query('INSERT INTO teams (name, invite_code, creator_id) VALUES ($1, $2, $3) RETURNING id', [
+    `팀${teamCounter}`,
+    `TEST-${teamCounter}`,
+    creatorId,
+  ]);
+  const id = rows[0].id;
+  return { id, membershipId: await addMember(creatorId, id, 'leader') };
+}
+
+// 팀 소속을 만들고 membership id를 돌려준다 (BE-03)
+export async function addMember(userId, teamId, role = 'member') {
+  const { rows } = await query('INSERT INTO team_memberships (user_id, team_id, role) VALUES ($1, $2, $3) RETURNING id', [
+    userId,
+    teamId,
+    role,
+  ]);
+  return rows[0].id;
+}
