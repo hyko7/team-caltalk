@@ -1,6 +1,6 @@
 # Team CalTalk 실행 계획 (WBS)
 
-버전 0.9 · 최종 수정일 2026-09-30
+버전 1.0 · 최종 수정일 2026-10-01
 
 참조 문서: `docs/1-domain-definition.md` (도메인 정의서 v0.4), `docs/2-PRD.md` (PRD v0.8), `docs/3-user-scenario.md` (사용자 시나리오 v0.2), `docs/4-wireframes.md` (와이어프레임 v0.5), `docs/5-project-principle.md` (프로젝트 구조 설계 원칙 v0.3), `docs/6-arch-diagram.md` (기술 아키텍처 다이어그램 v0.1), `docs/7-erd.md` (ERD v0.2), `docs/schema.sql`
 
@@ -301,17 +301,26 @@ flowchart LR
 - `backend/test/teams.test.js`
 
 **완료 조건**
-- [ ] `POST /api/teams`가 201이고, 만든 사용자가 `leader`로 소속되며 teams·team_memberships·chat_rooms에 각각 1행이 생긴다 (BR-11, BR-17, UC-09)
-- [ ] 팀 생성 도중 오류를 일으키면 팀·소속·채팅방이 하나도 남지 않는다 (B2-8)
-- [ ] 초대 코드는 무작위 값이며 팀마다 다르다 (BR-12, S5-10)
-- [ ] 팀 이름이 비어 있으면 400이다 (S5-12)
-- [ ] `GET /api/teams`는 내가 소속된 팀만 돌려주고 각 항목에 내 역할이 있으며 초대 코드는 없다 (BR-10, BR-19, S5-10)
-- [ ] 소속 팀이 없는 사용자는 빈 목록을 받는다 (SC-02, WF-03)
-- [ ] 한 사용자가 팀 A 팀장, 팀 B 팀원이면 목록에서 팀마다 다른 역할이 나온다 (BR-10, SC-14)
-- [ ] `GET /api/teams/:teamId/members`는 그 팀 구성원만 돌려주고 비밀번호 해시가 없다 (BR-09, S5-6)
-- [ ] 소속되지 않은 사용자가 구성원 목록을 요청하면 403이다 (BR-09) [T4-3]
-- [ ] 토큰 없이 세 경로를 요청하면 401이다 (BR-01)
-- [ ] 전체 `npm test` 통과, 이 Task 코드 커버리지 80% 이상 (스킬 기준)
+- [x] `POST /api/teams`가 201이고, 만든 사용자가 `leader`로 소속되며 teams·team_memberships·chat_rooms에 각각 1행이 생긴다 (BR-11, BR-17, UC-09)
+- [x] 팀 생성 도중 오류를 일으키면 팀·소속·채팅방이 하나도 남지 않는다 (B2-8)
+- [x] 초대 코드는 무작위 값이며 팀마다 다르다 (BR-12, S5-10)
+- [x] 팀 이름이 비어 있으면 400이다 (S5-12)
+- [x] `GET /api/teams`는 내가 소속된 팀만 돌려주고 각 항목에 내 역할이 있으며 초대 코드는 없다 (BR-10, BR-19, S5-10)
+- [x] 소속 팀이 없는 사용자는 빈 목록을 받는다 (SC-02, WF-03)
+- [x] 한 사용자가 팀 A 팀장, 팀 B 팀원이면 목록에서 팀마다 다른 역할이 나온다 (BR-10, SC-14)
+- [x] `GET /api/teams/:teamId/members`는 그 팀 구성원만 돌려주고 비밀번호 해시가 없다 (BR-09, S5-6)
+- [x] 소속되지 않은 사용자가 구성원 목록을 요청하면 403이다 (BR-09) [T4-3]
+- [x] 토큰 없이 세 경로를 요청하면 401이다 (BR-01)
+- [x] 전체 `npm test` 통과, 이 Task 코드 커버리지 80% 이상 (스킬 기준)
+
+**진행 결과 (2026-10-01, 이슈 #4, 브랜치 feature-4)**
+- `NODE_ENV=test`로 `npm test` 실행: 106개 통과, 실패 0, 전체 커버리지 lines 98.66%(기준 80%). `services/teams.js`·`routes/teams.js`는 줄·분기 100%. 테스트용 DB `team_caltalk_test`만 썼다.
+- 이 Task에서 정한 값 (결정-11 중 BE-04 부분):
+  - 팀 이름은 앞뒤 공백을 지운 값을 저장하고, 문자열이 아니거나 비면 400 `팀 이름을 입력해 주세요`. 길이 제한은 두지 않았다(문서에 값이 없음).
+  - 초대 코드는 `crypto.randomBytes(9).toString('base64url')`(12자). 재시도 없이 `teams_invite_code_key`가 유일성을 보장한다. 응답에는 넣지 않는다(BE-05의 `invite-code` 경로가 보여 준다).
+  - 팀 생성 INSERT 순서는 teams → team_memberships(`leader`) → chat_rooms이고 한 트랜잭션이다. 그래서 팀마다 채팅방이 항상 1개다(BE-08이 가정해도 된다).
+  - 응답: `POST /api/teams` 201 `{ id, name, role: 'leader' }`, `GET /api/teams` `[{ id, name, role }]`(`teams.id` 오름차순), 구성원 목록 `[{ membershipId, userId, name, role }]`(`team_memberships.id` 오름차순, 이메일·해시 없음). 구성원 목록은 팀원도 볼 수 있다(`requireLeader` 미사용).
+  - 롤백 테스트는 `chat_rooms`에 임시 CHECK 제약(`NOT VALID`)을 걸어 세 번째 INSERT를 실패시키고, `finally`에서 제약을 지운다(`--test-concurrency=1` 전제).
 
 ### BE-05 초대 코드 확인·팀 참여 API
 
@@ -806,3 +815,4 @@ FE Task의 UI 작업은 결정-2(스타일 가이드 없음)의 영향을 받는
 | 0.7 | 2026-10-01 | hyko7 | BE-01 완료: 완료 조건 10개 체크, 진행 결과(테스트 37개 통과, 커버리지 96.89%) 기록 |
 | 0.8 | 2026-10-01 | hyko7 | BE-02 완료: 완료 조건 체크, 진행 결과(테스트 63개 통과, 커버리지 97.18%)와 BE-02에서 정한 값(토큰 7d·sub, 이메일 소문자, 응답 {id, name}, bigint 숫자 변환, 해시 형식) 기록 |
 | 0.9 | 2026-10-01 | hyko7 | BE-03 완료: 완료 조건 11개 체크, 진행 결과(테스트 90개 통과, 커버리지 98.41%)와 미들웨어 이름·req 값·검사 규칙·로그 키 기록 |
+| 1.0 | 2026-10-01 | hyko7 | BE-04 완료: 완료 조건 11개 체크, 진행 결과(테스트 106개 통과, 커버리지 98.66%)와 팀 이름·초대 코드·응답 형식·정렬·롤백 검증 방법 기록 |

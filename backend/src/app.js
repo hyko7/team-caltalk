@@ -1,4 +1,4 @@
-// Express 설정. 서버 상태 확인용 /health와 인증 경로(/api/auth)가 있다.
+// Express 설정. 서버 상태 확인용 /health와 인증 경로(/api/auth), 팀 경로(/api/teams)가 있다.
 import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
@@ -6,6 +6,7 @@ import { query } from './db.js';
 import { httpError } from './lib/httpError.js';
 import { requestLogger, errorHandler } from './middleware/errorHandler.js';
 import { authRouter } from './routes/auth.js';
+import { teamsRouter } from './routes/teams.js';
 
 export const app = express();
 
@@ -13,6 +14,7 @@ app.use(cors({ origin: config.corsOrigin }));
 app.use(requestLogger);
 app.use(express.json());
 app.use('/api/auth', authRouter);
+app.use('/api/teams', teamsRouter);
 
 // 서버와 DB 연결이 살아 있는지 확인한다
 app.get('/health', async (req, res) => {
