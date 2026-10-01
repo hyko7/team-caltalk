@@ -14,6 +14,7 @@
 | `JWT_SECRET` | 토큰 서명 키 (비밀값) |
 | `JWT_EXPIRES_IN` | 토큰 유효 기간 (값은 미결-3) |
 | `CORS_ORIGIN` | 허용할 프론트엔드 주소 |
+| `NODE_ENV` | 실행 환경. `development`(개발) 또는 `production`(운영). 로그 출력 여부를 정한다(5장) |
 
 - 환경변수는 `src/config.js` 한 곳에서만 읽는다. 다른 파일에서 `process.env`를 직접 읽지 않는다.
 - 필수 값이 없으면 서버가 시작할 때 오류를 내고 멈춘다.
@@ -55,6 +56,7 @@ backend/
 │  ├─ services/          auth, teams, schedules, messages (규칙 + SQL)
 │  └─ lib/
 │     ├─ httpError.js    상태 코드가 담긴 오류
+│     ├─ logger.js       로그 출력 함수 (5장)
 │     └─ time.js         한국 표준시 날짜 ↔ UTC 변환 (NFR-05)
 └─ test/                 실제 테스트 DB(team_caltalk_test)를 쓰는 API 테스트
 ```
@@ -79,3 +81,19 @@ backend/
 - DB 스키마는 `docs/schema.sql`이 기준이다. 스키마를 바꾸면 `docs/7-erd.md`도 함께 고친다.
 - 응답 형식과 상태 코드는 `docs/swagger.json`과 맞춘다. 다르게 구현해야 하면 먼저 알린다.
 - 테스트는 거부 케이스(권한 없음, 다른 팀 접근, 잘못된 입력)부터 쓴다(T4-1, T4-3).
+
+## 5. 로깅 규칙
+
+- **모든 로그는 `src/lib/logger.js`의 logger로만 남긴다.** 다른 파일에서 `console.log`, `console.error`를 직접 쓰지 않는다.
+- logger는 로그 라이브러리 없이 작은 함수로 만든다(설계 원칙 S5-13). 수준은 `info`, `error` 두 가지면 충분하다.
+- **`NODE_ENV=development`일 때만 출력하고, `production`에서는 출력하지 않는다.** `NODE_ENV` 값은 `config.js`에서 읽어 logger에 넘긴다.
+- 원인을 알 수 있도록 충분히 기록한다.
+
+| 대상 | 남길 내용 |
+|------|-----------|
+| 요청 | 메서드, 경로, 상태 코드, 소요 시간, 사용자 ID(로그인한 경우), 팀 ID(경로에 있으면) |
+| 오류 | 오류 메시지, 상태 코드, 스택, 발생한 요청의 메서드·경로 |
+| DB 쿼리 실패 | PostgreSQL 오류 코드와 메시지, 제약 이름(있으면), 실패한 SQL 문장. 파라미터 값은 개수만 남긴다 |
+
+- **민감 정보는 남기지 않는다:** 비밀번호, 비밀번호 해시, JWT 토큰(`Authorization` 헤더), `JWT_SECRET`, DB 연결 문자열. 요청 본문과 쿼리 파라미터는 통째로 찍지 않고 필요한 값만 골라 남긴다.
+- 오류 응답(`{ "message": "..." }`)에는 로그에 남긴 스택·SQL을 담지 않는다(S5-14).
