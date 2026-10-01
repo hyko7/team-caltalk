@@ -28,3 +28,21 @@ export async function startServer(app) {
       }),
   };
 }
+
+// 실제 API로 가입한 뒤 로그인해 토큰을 받는다 (BE-02)
+let userCounter = 0;
+export async function createUserAndLogin(baseUrl, { email, password = 'password123', name = '테스트' } = {}) {
+  email ??= `user${++userCounter}@test.dev`;
+  const post = (path, body) =>
+    fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const signup = await post('/api/auth/signup', { email, password, name });
+  if (signup.status !== 201) throw new Error(`가입 실패 ${signup.status}: ${(await signup.json()).message}`);
+  const login = await post('/api/auth/login', { email, password });
+  if (login.status !== 200) throw new Error(`로그인 실패 ${login.status}: ${(await login.json()).message}`);
+  const { user, token } = await login.json();
+  return { user, token, email, password };
+}
