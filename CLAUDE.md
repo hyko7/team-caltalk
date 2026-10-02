@@ -128,6 +128,7 @@ team-caltalk/
 | `docs/schema.sql` | DB 생성 DDL (PostgreSQL 18) |
 | `docs/seed.sql` | 개발용 DB(team_caltalk)에 넣는 테스트 데이터. 기존 데이터를 지우고 다시 넣는다 |
 | `docs/swagger.json` | 백엔드 API 명세 (OpenAPI 3.0.3) |
+| `docs/APP_STYLE_GUIDE.md` | 프론트엔드 스타일 가이드. 색상, 글자, 버튼, 캘린더 칸, 채팅 영역 규칙 (`docs/ref-calendar.png` 기반) |
 
 - 두 문서가 어긋나면 도메인 규칙은 도메인 정의서를, 기술·성능·일정은 PRD를 따른다. 어긋난 부분은 사용자에게 알린다.
 - 코드와 커밋에서 요구사항을 가리킬 때는 문서의 ID(UC-xx, BR-xx, FR-xx, NFR-xx, SC-xx, WF-xx)를 쓴다.
