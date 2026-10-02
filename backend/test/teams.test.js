@@ -249,3 +249,201 @@ test('팀원도 같은 팀 구성원 목록을 200으로 본다', async () => {
   assert.equal(res.status, 200);
   assert.deepEqual(res.body.map((m) => m.role), ['leader', 'member']);
 });
+
+// ---- 초대 코드 확인·팀 참여 (BE-05) ----
+
+const MSG5 = {
+  leaderOnly: '팀장만 초대 코드를 볼 수 있습니다',
+  inviteCode: '초대 코드를 입력해 주세요',
+  badCode: '초대 코드가 올바르지 않습니다',
+  joined: '이미 참여한 팀입니다',
+};
+async function inviteCodeOf(teamId) {
+  const { rows } = await query('SELECT invite_code FROM teams WHERE id=$1', [teamId]);
+  return rows[0].invite_code;
+}
+async function membershipCount(userId, teamId) {
+  const { rows } = await query('SELECT count(*)::int AS n FROM team_memberships WHERE user_id=$1 AND team_id=$2', [
+    userId,
+    teamId,
+  ]);
+  return rows[0].n;
+}
+
+// 거부
+
+test('토큰 없이 초대 코드를 보면 401이다', async () => {
+  const owner = await user();
+  const team = await createTeam(owner.user.id);
+  const res = await get(`/api/teams/${team.id}/invite-code`);
+  assert.equal(res.status, 401);
+  assert.deepEqual(res.body, { message: MSG.login });
+});
+
+test('teamId가 abc면 초대 코드 확인은 400이다', async () => {
+  const { token } = await user();
+  const res = await get('/api/teams/abc/invite-code', token);
+  assert.equal(res.status, 400);
+  assert.deepEqual(res.body, { message: MSG.badTeamId });
+});
+
+test('소속되지 않은 팀·없는 팀의 초대 코드는 403이고 코드가 노출되지 않는다', async () => {
+  const owner = await user();
+  const outsider = await user();
+  const team = await createTeam(owner.user.id);
+  const code = await inviteCodeOf(team.id);
+  for (const id of [team.id, 999999]) {
+    const res = await get(`/api/teams/${id}/invite-code`, outsider.token);
+    assert.equal(res.status, 403, String(id));
+    assert.deepEqual(res.body, { message: MSG.forbidden });
+    assert.ok(!res.text.includes(code));
+  }
+});
+
+test('팀원은 초대 코드를 볼 수 없다(403)', async () => {
+  const leader = await user();
+  const member = await user();
+  const team = await createTeam(leader.user.id);
+  await addMember(member.user.id, team.id, 'member');
+  const res = await get(`/api/teams/${team.id}/invite-code`, member.token);
+  assert.equal(res.status, 403);
+  assert.deepEqual(res.body, { message: MSG5.leaderOnly });
+  assert.ok(!res.text.includes(await inviteCodeOf(team.id)));
+});
+
+test('토큰 없이 팀에 참여하면 401이고 소속 행이 늘지 않는다', async () => {
+  const owner = await user();
+  const team = await createTeam(owner.user.id);
+  const res = await post('/api/teams/join', { inviteCode: await inviteCodeOf(team.id) });
+  assert.equal(res.status, 401);
+  assert.deepEqual(res.body, { message: MSG.login });
+  assert.equal(await count('team_memberships'), 1);
+});
+
+test('초대 코드가 없거나(없음·{}·빈 문자열·공백·숫자·null·본문 없음) 문자열이 아니면 400이다', async () => {
+  const { token } = await user();
+  for (const body of [undefined, {}, { inviteCode: '' }, { inviteCode: '   ' }, { inviteCode: 123 }, { inviteCode: null }]) {
+    const res = await post('/api/teams/join', body, token);
+    assert.equal(res.status, 400, JSON.stringify(body));
+    assert.deepEqual(res.body, { message: MSG5.inviteCode }, JSON.stringify(body));
+  }
+  const noBody = await send('/api/teams/join', { method: 'POST' }, token);
+  assert.equal(noBody.status, 400);
+  assert.deepEqual(noBody.body, { message: MSG5.inviteCode });
+  assert.equal(await count('team_memberships'), 0);
+});
+
+test('없는 초대 코드는 404이고 소속 행이 늘지 않는다', async () => {
+  const owner = await user();
+  const joiner = await user();
+  await createTeam(owner.user.id);
+  const res = await post('/api/teams/join', { inviteCode: 'NO-SUCH-CODE' }, joiner.token);
+  assert.equal(res.status, 404);
+  assert.deepEqual(res.body, { message: MSG5.badCode });
+  assert.equal(await count('team_memberships'), 1);
+});
+
+test('이미 소속된 팀(팀원·팀장)에 다시 참여하면 409이고 소속 행이 1개로 유지된다', async () => {
+  const leader = await user();
+  const member = await user();
+  const team = await createTeam(leader.user.id);
+  await addMember(member.user.id, team.id, 'member');
+  const code = await inviteCodeOf(team.id);
+  for (const who of [member, leader]) {
+    const res = await post('/api/teams/join', { inviteCode: code }, who.token);
+    assert.equal(res.status, 409);
+    assert.deepEqual(res.body, { message: MSG5.joined });
+    assert.equal(await membershipCount(who.user.id, team.id), 1);
+  }
+  const { rows } = await query('SELECT user_id, role FROM team_memberships WHERE team_id=$1 ORDER BY id', [team.id]);
+  assert.deepEqual(rows, [
+    { user_id: leader.user.id, role: 'leader' },
+    { user_id: member.user.id, role: 'member' },
+  ]);
+});
+
+// 성공
+
+test('팀장은 초대 코드를 200으로 본다(DB 값 그대로, 키 inviteCode뿐)', async () => {
+  const leader = await user();
+  const team = await createTeam(leader.user.id);
+  const res = await get(`/api/teams/${team.id}/invite-code`, leader.token);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, { inviteCode: await inviteCodeOf(team.id) });
+});
+
+test('API로 만든 팀의 초대 코드도 팀장이 그대로 본다', async () => {
+  const leader = await user();
+  const created = await post('/api/teams', { name: '개발팀' }, leader.token);
+  const res = await get(`/api/teams/${created.body.id}/invite-code`, leader.token);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, { inviteCode: await inviteCodeOf(created.body.id) });
+  assert.match(res.body.inviteCode, INVITE_RE);
+});
+
+test('팀 참여: 201, id·name·role(member)뿐이고 초대 코드가 없다. 소속 행이 member로 생긴다', async () => {
+  const leader = await user();
+  const joiner = await user();
+  const team = await createTeam(leader.user.id);
+  const code = await inviteCodeOf(team.id);
+  const res = await post('/api/teams/join', { inviteCode: code }, joiner.token);
+  assert.equal(res.status, 201);
+  assert.deepEqual(Object.keys(res.body).sort(), ['id', 'name', 'role']);
+  const { rows: teamRows } = await query('SELECT name FROM teams WHERE id=$1', [team.id]);
+  assert.deepEqual(res.body, { id: team.id, name: teamRows[0].name, role: 'member' });
+  assert.ok(!res.text.includes(code));
+
+  const { rows } = await query('SELECT user_id, role FROM team_memberships WHERE team_id=$1 ORDER BY id', [team.id]);
+  assert.deepEqual(rows, [
+    { user_id: leader.user.id, role: 'leader' },
+    { user_id: joiner.user.id, role: 'member' },
+  ]);
+});
+
+test('참여 후 내 팀 목록·구성원 목록에 초대 코드가 없고 leader가 새로 생기지 않는다', async () => {
+  const leader = await user();
+  const joiner = await user();
+  const team = await createTeam(leader.user.id);
+  const code = await inviteCodeOf(team.id);
+  await post('/api/teams/join', { inviteCode: code }, joiner.token);
+
+  const list = await get('/api/teams', joiner.token);
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.body.map((t) => [t.id, t.role]), [[team.id, 'member']]);
+  assert.ok(!list.text.includes(code));
+
+  const members = await get(`/api/teams/${team.id}/members`, joiner.token);
+  assert.equal(members.status, 200);
+  assert.deepEqual(
+    members.body.map((m) => [m.userId, m.role]),
+    [
+      [leader.user.id, 'leader'],
+      [joiner.user.id, 'member'],
+    ],
+  );
+  assert.ok(!members.text.includes(code));
+});
+
+test('참여한 팀원도 초대 코드는 볼 수 없다(403)', async () => {
+  const leader = await user();
+  const joiner = await user();
+  const team = await createTeam(leader.user.id);
+  await post('/api/teams/join', { inviteCode: await inviteCodeOf(team.id) }, joiner.token);
+  const res = await get(`/api/teams/${team.id}/invite-code`, joiner.token);
+  assert.equal(res.status, 403);
+  assert.deepEqual(res.body, { message: MSG5.leaderOnly });
+});
+
+test('같은 사용자가 같은 코드로 동시에 두 번 참여하면 201 하나, 409 하나이고 소속 행은 1개다', async () => {
+  const leader = await user();
+  const joiner = await user();
+  const team = await createTeam(leader.user.id);
+  const code = await inviteCodeOf(team.id);
+  const results = await Promise.all([
+    post('/api/teams/join', { inviteCode: code }, joiner.token),
+    post('/api/teams/join', { inviteCode: code }, joiner.token),
+  ]);
+  assert.deepEqual(results.map((r) => r.status).sort(), [201, 409]);
+  assert.deepEqual(results.find((r) => r.status === 409).body, { message: MSG5.joined });
+  assert.equal(await membershipCount(joiner.user.id, team.id), 1);
+});

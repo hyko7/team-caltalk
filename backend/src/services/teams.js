@@ -1,4 +1,4 @@
-// 팀 생성·내 팀 목록·구성원 목록 규칙과 SQL (FR-03, FR-04, UC-09, BR-10, BR-11, BR-17, S5-10, B2-8)
+// 팀 생성·내 팀 목록·구성원 목록·초대 코드·팀 참여 규칙과 SQL (FR-03~06, UC-09, UC-10, BR-10~12, BR-17, S5-10, B2-6, B2-8)
 import { randomBytes } from 'node:crypto';
 import { query, transaction } from '../db.js';
 import { httpError } from '../lib/httpError.js';
@@ -34,4 +34,25 @@ export async function listMembers(teamId) {
     [teamId],
   );
   return rows.map((r) => ({ membershipId: r.membership_id, userId: r.user_id, name: r.name, role: r.role }));
+}
+
+// 초대 코드. 팀장 검사는 middleware에서 끝났다 (B2-5).
+export async function getInviteCode(teamId) {
+  const { rows } = await query('SELECT invite_code FROM teams WHERE id = $1', [teamId]);
+  return { inviteCode: rows[0].invite_code };
+}
+
+// 초대 코드로 참여. 항상 member (BR-11). 중복은 (user_id, team_id) UNIQUE 위반을 409로 바꾼다 (B2-6, UC-10).
+export async function joinTeam(userId, { inviteCode } = {}) {
+  const code = typeof inviteCode === 'string' ? inviteCode.trim() : '';
+  if (!code) throw httpError(400, '초대 코드를 입력해 주세요'); // S5-12
+  const { rows } = await query('SELECT id, name FROM teams WHERE invite_code = $1', [code]);
+  if (rows.length === 0) throw httpError(404, '초대 코드가 올바르지 않습니다'); // SC-04 E1
+  try {
+    await query("INSERT INTO team_memberships (user_id, team_id, role) VALUES ($1, $2, 'member')", [userId, rows[0].id]);
+  } catch (error) {
+    if (error.code === '23505') throw httpError(409, '이미 참여한 팀입니다'); // SC-04 E2
+    throw error;
+  }
+  return { id: rows[0].id, name: rows[0].name, role: 'member' };
 }
